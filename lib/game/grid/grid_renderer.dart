@@ -32,7 +32,7 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
       vsync: this,
     );
     
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Curves.easeInOut,
@@ -105,7 +105,7 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
   void _createFallingParticles(List<_CellClearData> cells) {
     const cellMargin = 0.5;
     final cellSpacing = widget.cellSize + (cellMargin * 2);
-    const gridPadding = 4.0;
+    const gridPadding = 0.5; // Match container padding
     
     for (var cellData in cells) {
       // Calculate cell center position (local to grid container)
@@ -146,11 +146,11 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
           if (cell?.isFilled == true && cell?.color != 0) {
             // Check if we haven't already created particles for this cell
             final alreadyHasParticle = _fallingParticles.any((p) {
-              const cellMargin = 0.5;
-              final cellSpacing = widget.cellSize + (cellMargin * 2);
-              const gridPadding = 4.0;
-              final cellX = (col * cellSpacing) + gridPadding + (widget.cellSize / 2);
-              final cellY = (row * cellSpacing) + gridPadding + (widget.cellSize / 2);
+            const cellMargin = 0.5;
+            final cellSpacing = widget.cellSize + (cellMargin * 2);
+            const gridPadding = 0.5; // Match container padding
+            final cellX = (col * cellSpacing) + gridPadding + (widget.cellSize / 2);
+            final cellY = (row * cellSpacing) + gridPadding + (widget.cellSize / 2);
               return (p.position.dx - cellX).abs() < 5 && (p.position.dy - cellY).abs() < 5;
             });
             
@@ -188,10 +188,11 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
       clipBehavior: Clip.none,
       children: [
         Container(
-          padding: const EdgeInsets.all(4),
+          // Padding matches cell margin (0.5) to align grid perfectly with border
+          padding: const EdgeInsets.all(0.5),
           decoration: BoxDecoration(
             color: const Color(GameConstants.gridBackgroundColor),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.zero, // Square corners to match grid cells
             border: Border.all(
               color: const Color(GameConstants.gridLineColor).withValues(alpha: 0.3),
               width: 2,
@@ -257,11 +258,12 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
                     width: 2,
                   ),
                   borderRadius: BorderRadius.circular(4),
+                  // Reduced glow effect for less visual noise
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      blurRadius: 8 * _scaleAnimation.value,
-                      spreadRadius: 2 * _scaleAnimation.value,
+                      color: Colors.white.withValues(alpha: 0.3),
+                      blurRadius: 4 * _scaleAnimation.value,
+                      spreadRadius: 1 * _scaleAnimation.value,
                     ),
                   ],
                 ),

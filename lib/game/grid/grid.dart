@@ -180,23 +180,37 @@ class Grid {
   void initializeWithRandomBlocks({int numBlocks = 8}) {
     _initializeGrid();
     final random = Random();
+    // Include more variety of shapes for better line-breaking opportunities
     final simpleShapes = [
       [[true]], // Single block
       [[true, true]], // 2x1 horizontal
       [[true], [true]], // 1x2 vertical
+      [[true, true, true]], // 3x1 horizontal
+      [[true], [true], [true]], // 1x3 vertical
+      [[true, true], [true, true]], // 2x2 square
       [[true, true], [true, false]], // Small L
       [[true, true], [false, true]], // Small reverse L
+      [[true, true], [true, false], [true, false]], // Medium L
     ];
     
     int attempts = 0;
     int placedBlocks = 0;
-    const maxAttempts = 200;
+    const maxAttempts = 500; // Increased to place more blocks
     
     while (placedBlocks < numBlocks && attempts < maxAttempts) {
       attempts++;
       
-      // Pick a random simple shape
-      final shape = simpleShapes[random.nextInt(simpleShapes.length)];
+      // Pick a random shape (prefer smaller shapes for better distribution)
+      List<List<bool>> shape;
+      if (placedBlocks < numBlocks * 0.6) {
+        // First 60%: prefer smaller shapes
+        final smallShapes = simpleShapes.take(6).toList();
+        shape = smallShapes[random.nextInt(smallShapes.length)];
+      } else {
+        // Last 40%: can use any shape
+        shape = simpleShapes[random.nextInt(simpleShapes.length)];
+      }
+      
       final color = GameConstants.blockColors[random.nextInt(GameConstants.blockColors.length)];
       
       // Try to find a valid position
@@ -205,8 +219,8 @@ class Grid {
       
       if (maxRow < 0 || maxCol < 0) continue;
       
-      // Try random positions
-      for (int tryCount = 0; tryCount < 15; tryCount++) {
+      // Try more positions (increased from 15 to 30)
+      for (int tryCount = 0; tryCount < 30; tryCount++) {
         final row = random.nextInt(maxRow + 1);
         final col = random.nextInt(maxCol + 1);
         
@@ -237,6 +251,86 @@ class Grid {
         }
       }
     }
+  }
+  
+  /// Check if placing a block would create a full line
+  bool wouldCreateFullLine(List<List<bool>> shape, int startRow, int startCol) {
+    // Temporarily place the block
+    final tempCells = List.generate(rows, (row) => 
+      List.generate(cols, (col) => _cells[row][col].isEmpty ? false : true));
+    
+    // Mark cells that would be filled
+    for (int i = 0; i < shape.length; i++) {
+      for (int j = 0; j < shape[i].length; j++) {
+        if (shape[i][j]) {
+          final row = startRow + i;
+          final col = startCol + j;
+          if (row >= 0 && row < rows && col >= 0 && col < cols) {
+            tempCells[row][col] = true;
+          }
+        }
+      }
+    }
+    
+    // Check if any row would be full
+    for (int row = 0; row < rows; row++) {
+      bool rowFull = true;
+      for (int col = 0; col < cols; col++) {
+        if (!tempCells[row][col]) {
+          rowFull = false;
+          break;
+        }
+      }
+      if (rowFull) return true;
+    }
+    
+    // Check if any column would be full
+    for (int col = 0; col < cols; col++) {
+      bool colFull = true;
+      for (int row = 0; row < rows; row++) {
+        if (!tempCells[row][col]) {
+          colFull = false;
+          break;
+        }
+      }
+      if (colFull) return true;
+    }
+    
+    return false;
+  }
+  
+  /// Get rows that are almost full (missing 1-3 cells)
+  List<int> getAlmostFullRows({int maxMissing = 3}) {
+    List<int> almostFull = [];
+    for (int row = 0; row < rows; row++) {
+      int emptyCount = 0;
+      for (int col = 0; col < cols; col++) {
+        if (getCell(row, col)?.isEmpty ?? true) {
+          emptyCount++;
+        }
+      }
+      if (emptyCount > 0 && emptyCount <= maxMissing) {
+        almostFull.add(row);
+      }
+    }
+    return almostFull;
+  }
+  
+  /// Get columns that are almost full (missing 1-3 cells)
+  List<int> getAlmostFullCols({int maxMissing = 3}) {
+    List<int> almostFull = [];
+    for (int col = 0; col < cols; col++) {
+      int emptyCount = 0;
+      for (int row = 0; row < rows; row++) {
+        if (getCell(row, col)?.isEmpty ?? true) {
+          emptyCount++;
+        }
+      }
+      if (emptyCount > 0 && emptyCount <= maxMissing) {
+        almostFull.add(col);
+      }
+    }
+    return almostFull;
   }
   
   /// Get all cells (for rendering)

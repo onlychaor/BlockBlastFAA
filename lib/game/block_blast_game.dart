@@ -9,6 +9,7 @@ import '../utils/helpers.dart';
 import '../utils/audio_manager.dart';
 import '../utils/character_audio_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 
 enum GameState {
   playing,
@@ -35,8 +36,8 @@ class BlockBlastGame {
         audioManager = AudioManager(),
         characterAudioManager = CharacterAudioManager() {
     _loadBestScore();
-    // Initialize grid with random blocks at start
-    grid.initializeWithRandomBlocks(numBlocks: 8);
+    // Initialize grid with fewer blocks for easier start
+    grid.initializeWithRandomBlocks(numBlocks: 5);
     _generateNewBlocks();
   }
   
@@ -66,16 +67,180 @@ class BlockBlastGame {
   Character? get currentCharacter => _currentCharacter;
   int get totalLinesCleared => _totalLinesCleared;
   
+  /// Check if a block can be placed anywhere on the grid
+  bool _canPlaceBlockAnywhere(Block block) {
+    for (int row = 0; row <= grid.rows - block.height; row++) {
+      for (int col = 0; col <= grid.cols - block.width; col++) {
+        if (grid.canPlaceBlock(block.shapeMatrix, row, col)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  
+  /// Check if a block can create a full line when placed
+  bool _canBlockCreateFullLine(Block block) {
+    for (int row = 0; row <= grid.rows - block.height; row++) {
+      for (int col = 0; col <= grid.cols - block.width; col++) {
+        if (grid.canPlaceBlock(block.shapeMatrix, row, col)) {
+          if (grid.wouldCreateFullLine(block.shapeMatrix, row, col)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+  
   /// Generate new blocks for the queue
+  /// Ensures blocks are suitable for current grid state and at least one can break lines
   void _generateNewBlocks() {
     blockQueue.clear();
-    final shapes = BlockShapes.getShapesByLevel(_level, GameConstants.maxBlocksInQueue);
-    for (var shape in shapes) {
+    final random = Random();
+    final allShapes = BlockShapes.getAllShapes();
+    
+    // Get almost full rows/cols to prioritize blocks that can complete them
+    final almostFullRows = grid.getAlmostFullRows();
+    final almostFullCols = grid.getAlmostFullCols();
+    final hasAlmostFullLines = almostFullRows.isNotEmpty || almostFullCols.isNotEmpty;
+    
+    // For level 1, only use very basic shapes
+    List<List<List<bool>>> availableShapes;
+    if (_level == 1) {
+      // Level 1: Only the simplest shapes
+      availableShapes = [
+        BlockShapes.single,
+        BlockShapes.horizontal2,
+        BlockShapes.vertical2,
+        BlockShapes.square2x2,
+      ];
+    } else if (_level <= 3) {
+      // Level 2-3: Filter out 3x3 square and complex shapes
+      availableShapes = allShapes.where((shape) => 
+        shape != BlockShapes.square3x3 &&
+        shape != BlockShapes.horizontal4 &&
+        shape != BlockShapes.zShape4 &&
+        shape != BlockShapes.tShape4
+      ).toList();
+    } else {
+      // Level 4+: All shapes available
+      availableShapes = allShapes;
+    }
+    
+    int attempts = 0;
+    const maxAttempts = 50;
+    bool hasLineBreaker = false;
+    bool hasPlaceableBlock = false;
+    
+    // Generate blocks with smart selection
+    while (blockQueue.length < GameConstants.maxBlocksInQueue && attempts < maxAttempts) {
+      attempts++;
+      
+      // Prefer smaller blocks that can fit in gaps
+      List<List<List<bool>>> candidateShapes;
+      if (hasAlmostFullLines && !hasLineBreaker) {
+        // Prioritize blocks that can complete almost-full lines
+        // Prefer blocks with 1-3 cells for almost-full lines
+        candidateShapes = availableShapes.where((shape) {
+          int cellCount = 0;
+          for (var row in shape) {
+            for (var cell in row) {
+              if (cell) cellCount++;
+            }
+          }
+          return cellCount >= 1 && cellCount <= 4;
+        }).toList();
+        if (candidateShapes.isEmpty) {
+          candidateShapes = availableShapes;
+        }
+      } else {
+        // Normal selection - prefer smaller blocks, especially for level 1
+        candidateShapes = availableShapes.where((shape) {
+          int cellCount = 0;
+          for (var row in shape) {
+            for (var cell in row) {
+              if (cell) cellCount++;
+            }
+          }
+          // Level 1: only 1-4 cells, Level 2-3: up to 5 cells, Level 4+: up to 6 cells
+          if (_level == 1) {
+            return cellCount <= 4;
+          } else if (_level <= 3) {
+            return cellCount <= 5;
+          } else {
+            return cellCount <= 6;
+          }
+        }).toList();
+        if (candidateShapes.isEmpty) {
+          candidateShapes = availableShapes;
+        }
+      }
+      
+      final shape = candidateShapes[random.nextInt(candidateShapes.length)];
       final color = Helpers.getRandomColor(GameConstants.blockColors);
-      blockQueue.add(Block(
+      final block = Block(
         shape: BlockShape(shape: shape, name: 'block'),
         color: color,
+      );
+      
+      // Check if block can be placed
+      if (_canPlaceBlockAnywhere(block)) {
+        hasPlaceableBlock = true;
+        
+        // Check if block can create full line
+        if (_canBlockCreateFullLine(block)) {
+          hasLineBreaker = true;
+        }
+        
+        blockQueue.add(block);
+      } else if (blockQueue.length == 0) {
+        // If queue is empty and this block can't be placed, try a simple block
+        final simpleShape = BlockShapes.single;
+        blockQueue.add(Block(
+          shape: BlockShape(shape: simpleShape, name: 'block'),
+          color: color,
+        ));
+        hasPlaceableBlock = true;
+      }
+    }
+    
+    // Ensure at least one block can be placed
+    if (!hasPlaceableBlock && blockQueue.isNotEmpty) {
+      // Replace last block with a simple one
+      blockQueue.removeLast();
+      final simpleShape = BlockShapes.single;
+      final color = Helpers.getRandomColor(GameConstants.blockColors);
+      blockQueue.add(Block(
+        shape: BlockShape(shape: simpleShape, name: 'block'),
+        color: color,
       ));
+    }
+    
+    // If we have almost-full lines but no line breaker, try to add one
+    if (hasAlmostFullLines && !hasLineBreaker && blockQueue.length < GameConstants.maxBlocksInQueue) {
+      // Try to find a small block that can complete a line
+      final smallShapes = [
+        BlockShapes.single,
+        BlockShapes.horizontal2,
+        BlockShapes.vertical2,
+        BlockShapes.cornerShape,
+        BlockShapes.reverseCornerShape,
+      ];
+      
+      for (var shape in smallShapes) {
+        final block = Block(
+          shape: BlockShape(shape: shape, name: 'block'),
+          color: Helpers.getRandomColor(GameConstants.blockColors),
+        );
+        if (_canBlockCreateFullLine(block)) {
+          if (blockQueue.length >= GameConstants.maxBlocksInQueue) {
+            blockQueue.removeLast();
+          }
+          blockQueue.add(block);
+          break;
+        }
+      }
     }
   }
   
@@ -236,8 +401,8 @@ class BlockBlastGame {
   
   /// Reset game
   void reset() {
-    // Initialize grid with random blocks when resetting
-    grid.initializeWithRandomBlocks(numBlocks: 8);
+    // Initialize grid with fewer blocks for easier start
+    grid.initializeWithRandomBlocks(numBlocks: 5);
     _score = GameConstants.initialScore;
     _level = 1;
     _totalLinesCleared = 0;
