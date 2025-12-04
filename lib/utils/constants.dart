@@ -15,16 +15,16 @@ class GameConstants {
   static const int pointsPerLine = 100;
   static const int pointsPerBlock = 10;
   
-  // Colors (as ARGB integers)
+  // Colors (as ARGB integers) - Bright and vivid
   static const List<int> blockColors = [
-    0xFFFF6B6B, // Red
-    0xFF4ECDC4, // Teal
-    0xFF45B7D1, // Blue
-    0xFF96CEB4, // Green
-    0xFFFFEAA7, // Yellow
-    0xFFDDA15E, // Orange
-    0xFFA29BFE, // Purple
-    0xFFFF7675, // Pink
+    0xFFFF6B6B, // Bright Red
+    0xFF4ECDC4, // Bright Teal
+    0xFF45B7D1, // Bright Blue
+    0xFF96CEB4, // Bright Green
+    0xFFFFEAA7, // Bright Yellow
+    0xFFFFA726, // Bright Orange
+    0xFFAB47BC, // Bright Purple
+    0xFFEC407A, // Bright Pink
   ];
   
   // Grid colors

@@ -289,7 +289,7 @@ class _HomePageState extends State<HomePage> {
       child: BlockRenderer(
         key: ValueKey('renderer_${block.id}_$shapeHash'),
         block: block,
-        cellSize: 16.0,
+        cellSize: 12.0, // Reduced from 16.0 for smaller display
       ),
     );
   }
@@ -552,7 +552,7 @@ class _HomePageState extends State<HomePage> {
             
         // Block Queue
         Container(
-          constraints: const BoxConstraints(maxHeight: 110),
+          constraints: const BoxConstraints(maxHeight: 90),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           margin: const EdgeInsets.only(bottom: 4),
           child: Row(
@@ -576,8 +576,8 @@ class _HomePageState extends State<HomePage> {
                   _onBlockDragEnd(details);
                 },
                 child: SizedBox(
-                  width: 80,
-                  height: 80,
+                  width: 65,
+                  height: 65,
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(

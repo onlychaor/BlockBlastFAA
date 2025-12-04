@@ -44,9 +44,9 @@ class BlockRenderer extends StatelessWidget {
     }
     
     final baseColor = Color(color);
-    // Create lighter and darker variants for gradient
+    // Create balanced gradient colors - lighter than before
     final lightColor = Color.lerp(baseColor, Colors.white, 0.25) ?? baseColor;
-    final darkColor = Color.lerp(baseColor, Colors.black, 0.2) ?? baseColor;
+    final darkColor = Color.lerp(baseColor, Colors.black, 0.15) ?? baseColor;
     
     return Container(
       width: cellSize,
