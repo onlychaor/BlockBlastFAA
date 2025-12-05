@@ -44,16 +44,27 @@ class BlockRenderer extends StatelessWidget {
     }
     
     final baseColor = Color(color);
-    // Create balanced gradient colors - lighter than before
-    final lightColor = Color.lerp(baseColor, Colors.white, 0.25) ?? baseColor;
-    final darkColor = Color.lerp(baseColor, Colors.black, 0.15) ?? baseColor;
+    // Enhanced colors for better visibility when dragging (opacity < 1.0)
+    final isGhostBlock = opacity < 1.0;
+    
+    // Create more vibrant gradient colors for ghost blocks
+    final lightColor = Color.lerp(
+      baseColor, 
+      Colors.white, 
+      isGhostBlock ? 0.35 : 0.25
+    ) ?? baseColor;
+    final darkColor = Color.lerp(
+      baseColor, 
+      Colors.black, 
+      isGhostBlock ? 0.1 : 0.15
+    ) ?? baseColor;
     
     return Container(
       width: cellSize,
       height: cellSize,
       margin: const EdgeInsets.all(0.5),
       decoration: BoxDecoration(
-        // Gradient for 3D effect
+        // Gradient for 3D effect - more vibrant for ghost blocks
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -65,10 +76,12 @@ class BlockRenderer extends StatelessWidget {
           stops: const [0.0, 0.5, 1.0],
         ),
         borderRadius: BorderRadius.zero, // Square corners to match grid
-        // Outer border - bright highlight
+        // Outer border - brighter for ghost blocks
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.6),
-          width: 2,
+          color: isGhostBlock 
+            ? Colors.white.withValues(alpha: 0.9) 
+            : Colors.white.withValues(alpha: 0.6),
+          width: isGhostBlock ? 2.5 : 2,
         ),
         boxShadow: [
           // Inner highlight (top-left)
@@ -85,12 +98,12 @@ class BlockRenderer extends StatelessWidget {
             offset: const Offset(4, 4),
             spreadRadius: 0,
           ),
-          // Outer glow
+          // Outer glow - stronger for ghost blocks
           BoxShadow(
-            color: baseColor.withValues(alpha: 0.3),
-            blurRadius: 6,
+            color: baseColor.withValues(alpha: isGhostBlock ? 0.5 : 0.3),
+            blurRadius: isGhostBlock ? 8 : 6,
             offset: const Offset(2, 2),
-            spreadRadius: 1,
+            spreadRadius: isGhostBlock ? 2 : 1,
           ),
           // Inner shadow for depth
           BoxShadow(

@@ -50,6 +50,9 @@ class _HomePageState extends State<HomePage> {
   int? _lastGridRow;
   int? _lastGridCol;
   bool? _lastCanPlace;
+  Offset? _cachedGhostOffset;
+  int? _cachedGhostRow;
+  int? _cachedGhostCol;
   
   // Track rotated blocks to skip animation on rotation
   final Set<String> _rotatedBlocks = {};
@@ -83,7 +86,7 @@ class _HomePageState extends State<HomePage> {
   void _onBlockDragUpdate(DragUpdateDetails details) {
     if (!dragController.isDragging) return;
     
-    // Get grid position - no throttling for maximum smoothness
+    // Get grid position - optimized for smoothness
     final RenderBox? gridBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
     if (gridBox != null) {
       final gridLocalPosition = gridBox.globalToLocal(details.globalPosition);
@@ -91,14 +94,15 @@ class _HomePageState extends State<HomePage> {
       final oldCol = dragController.gridCol;
       dragController.updateDrag(gridLocalPosition);
       
-      // Only update UI if grid position actually changed
+      // Only update UI if grid position actually changed - reduces unnecessary rebuilds
       final newRow = dragController.gridRow;
       final newCol = dragController.gridCol;
       if (oldRow != newRow || oldCol != newCol) {
         _lastGridRow = newRow;
         _lastGridCol = newCol;
         _lastCanPlace = null; // Invalidate cache when position changes
-        // Direct setState for immediate response - no batching delay
+        _cachedGhostOffset = null; // Invalidate ghost offset cache
+        // Direct setState for immediate response - already optimized with position check
         setState(() {});
       }
     } else {
@@ -163,34 +167,65 @@ class _HomePageState extends State<HomePage> {
       gridBox.size.height / 2,
     );
     
-    // Determine text based on number of cleared lines with vibrant colors
+    final comboCount = game.comboCount;
+    
+    // Determine text based on number of cleared lines and combo with vibrant colors
     String? text1;
     String? text2;
+    String? text3; // Combo chain text
     Color textColor;
     double fontSize1;
     double fontSize2;
+    double fontSize3 = 0;
     
-    if (clearedLines >= 3) {
-      text1 = 'BIG COMBO!';
-      text2 = 'BRAINROT BONUS!';
+    if (clearedLines >= 5) {
+      text1 = 'MEGA CLEAR!';
+      text2 = 'LEGENDARY!';
+      textColor = const Color(0xFFFF00FF); // Magenta
+      fontSize1 = 42;
+      fontSize2 = 36;
+    } else if (clearedLines >= 4) {
+      text1 = 'QUAD CLEAR!';
+      text2 = 'AMAZING!';
       textColor = const Color(0xFFFF6B35); // Vibrant orange
-      fontSize1 = 36;
+      fontSize1 = 40;
+      fontSize2 = 34;
+    } else if (clearedLines >= 3) {
+      text1 = 'TRIPLE CLEAR!';
+      text2 = 'EXCELLENT!';
+      textColor = const Color(0xFFFF6B35); // Vibrant orange
+      fontSize1 = 38;
       fontSize2 = 32;
     } else if (clearedLines >= 2) {
-      text1 = 'COMBO!';
-      text2 = 'EXTRA CHAOS!';
+      text1 = 'DOUBLE CLEAR!';
+      text2 = 'NICE!';
       textColor = const Color(0xFFFFD700); // Gold yellow
-      fontSize1 = 34;
+      fontSize1 = 36;
       fontSize2 = 30;
     } else {
       text1 = 'CLEARED!';
       textColor = const Color(0xFF4ECDC4); // Bright teal
-      fontSize1 = 32;
+      fontSize1 = 34;
       fontSize2 = 0;
     }
     
-    // Add explosion effect at grid center
+    // Add combo chain text if combo > 1
+    if (comboCount > 1) {
+      if (comboCount >= 10) {
+        text3 = 'COMBO x$comboCount - INSANE!';
+        fontSize3 = 28;
+      } else if (comboCount >= 5) {
+        text3 = 'COMBO x$comboCount - EPIC!';
+        fontSize3 = 26;
+      } else {
+        text3 = 'COMBO x$comboCount!';
+        fontSize3 = 24;
+      }
+    }
+    
+    // Add multiple explosion effects for better visual impact
     setState(() {
+      // Main explosion at center
       _activeEffects.add(ComboEffect(
         type: ComboEffectType.explosion,
         position: gridCenter,
@@ -199,13 +234,31 @@ class _HomePageState extends State<HomePage> {
         fontSize: 0,
       ));
       
+      // Additional explosions around center for mega clears
+      if (clearedLines >= 4) {
+        _activeEffects.add(ComboEffect(
+          type: ComboEffectType.explosion,
+          position: Offset(gridCenter.dx - 40, gridCenter.dy - 40),
+          color: textColor.withOpacity(0.7),
+          text: null,
+          fontSize: 0,
+        ));
+        _activeEffects.add(ComboEffect(
+          type: ComboEffectType.explosion,
+          position: Offset(gridCenter.dx + 40, gridCenter.dy + 40),
+          color: textColor.withOpacity(0.7),
+          text: null,
+          fontSize: 0,
+        ));
+      }
+      
       // Add text effects with better positioning
       if (text1 != null) {
         _activeEffects.add(ComboEffect(
           type: ComboEffectType.text,
           position: Offset(
-            gridCenter.dx - (fontSize1 * text1.length * 0.3),
-            gridCenter.dy - 60,
+            gridCenter.dx - (fontSize1 * text1.length * 0.15),
+            gridCenter.dy - 80,
           ),
           color: textColor,
           text: text1,
@@ -217,18 +270,32 @@ class _HomePageState extends State<HomePage> {
         _activeEffects.add(ComboEffect(
           type: ComboEffectType.text,
           position: Offset(
-            gridCenter.dx - (fontSize2 * text2.length * 0.3),
-            gridCenter.dy + 20,
+            gridCenter.dx - (fontSize2 * text2.length * 0.15),
+            gridCenter.dy - 20,
           ),
           color: textColor,
           text: text2,
           fontSize: fontSize2,
         ));
       }
+      
+      // Combo chain text
+      if (text3 != null) {
+        _activeEffects.add(ComboEffect(
+          type: ComboEffectType.text,
+          position: Offset(
+            gridCenter.dx - (fontSize3 * text3.length * 0.15),
+            gridCenter.dy + 40,
+          ),
+          color: Colors.white,
+          text: text3,
+          fontSize: fontSize3,
+        ));
+      }
     });
     
     // Remove effects after animation
-    Future.delayed(const Duration(milliseconds: 2000), () {
+    Future.delayed(const Duration(milliseconds: 2500), () {
       if (mounted) {
         setState(() {
           _activeEffects.clear();
@@ -241,6 +308,56 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       game.reset();
     });
+  }
+  
+  /// Calculate ghost block offset for smooth positioning
+  /// Returns offset relative to Stack center (since Stack has alignment: Alignment.center)
+  /// Cached to prevent recalculation on every build
+  Offset _calculateGhostBlockOffset() {
+    if (dragController.gridRow == null || dragController.gridCol == null) {
+      _cachedGhostOffset = null;
+      return Offset.zero;
+    }
+    
+    // Use cached value if position hasn't changed
+    if (_cachedGhostOffset != null &&
+        _cachedGhostRow == dragController.gridRow &&
+        _cachedGhostCol == dragController.gridCol) {
+      return _cachedGhostOffset!;
+    }
+    
+    // Get grid container to calculate its actual position
+    final RenderBox? gridBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    if (gridBox == null) {
+      _cachedGhostOffset = null;
+      return Offset.zero;
+    }
+    
+    // Grid container size
+    final gridSize = gridBox.size;
+    
+    // Calculate grid content dimensions
+    const borderWidth = 3.0;
+    const cellMargin = 0.5;
+    final cellSpacing = GameConstants.cellSize + (cellMargin * 2); // 40 + 1 = 41px
+    final gridContentWidth = GameConstants.gridCols * cellSpacing;
+    final gridContentHeight = GameConstants.gridRows * cellSpacing;
+    
+    // Calculate offset from Stack center (Stack has alignment: Alignment.center)
+    // Grid is centered, so we need to offset from center
+    final gridOffsetX = (gridSize.width - gridContentWidth) / 2;
+    final gridOffsetY = (gridSize.height - gridContentHeight) / 2;
+    
+    // Calculate ghost block position: border + offset + (col/row * cellSpacing)
+    final offsetX = borderWidth + gridOffsetX + (dragController.gridCol! * cellSpacing);
+    final offsetY = borderWidth + gridOffsetY + (dragController.gridRow! * cellSpacing);
+    
+    // Cache the result
+    _cachedGhostOffset = Offset(offsetX, offsetY);
+    _cachedGhostRow = dragController.gridRow;
+    _cachedGhostCol = dragController.gridCol;
+    
+    return _cachedGhostOffset!;
   }
   
   Widget _buildGhostBlock() {
@@ -262,23 +379,19 @@ class _HomePageState extends State<HomePage> {
       _lastGridCol = currentCol;
     }
     
-    // Use RepaintBoundary and const constructors for better performance
+    // Use RepaintBoundary for better performance and higher opacity for clearer visibility
     return RepaintBoundary(
-      child: Opacity(
-        opacity: canPlace ? 0.5 : 0.3,
-        child: _buildGhostBlockCells(dragController.draggedBlock!, canPlace),
-      ),
+      child: _buildGhostBlockCells(dragController.draggedBlock!, canPlace),
     );
   }
   
   Widget _buildGhostBlockCells(Block block, bool canPlace) {
-    // Use BlockRenderer to ensure consistent rendering with queue blocks
-    // This ensures the ghost block has the exact same shape as the block in queue
-    // Use same cellSize as grid cells (40px) to ensure perfect alignment
+    // Use BlockRenderer with higher opacity for clearer visibility
+    // Increased opacity from 0.5/0.3 to 0.85/0.6 for better visibility
     return BlockRenderer(
       block: block,
       cellSize: GameConstants.cellSize,
-      opacity: canPlace ? 0.5 : 0.3,
+      opacity: canPlace ? 0.85 : 0.6, // Much clearer than before
     );
   }
   
@@ -457,9 +570,10 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Container(
                       key: _gridKey,
-                      child: GridRenderer(
-                        key: ValueKey('grid_${game.score}'),
-                        grid: game.grid,
+                      child: RepaintBoundary(
+                        child: GridRenderer(
+                          grid: game.grid,
+                        ),
                       ),
                     ),
                     // Ghost block preview on grid
@@ -471,36 +585,10 @@ class _HomePageState extends State<HomePage> {
                         dragController.gridCol! >= 0 &&
                         dragController.gridRow! + dragController.draggedBlock!.height <= GameConstants.gridRows &&
                         dragController.gridCol! + dragController.draggedBlock!.width <= GameConstants.gridCols)
-                      Builder(
-                        builder: (context) {
-                          // Calculate ghost block position relative to grid container
-                          final RenderBox? gridBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
-                          if (gridBox == null) return const SizedBox.shrink();
-                          
-                          // Get grid container size
-                          final gridSize = gridBox.size;
-                          
-                          // Calculate position relative to Stack center
-                          // Grid is centered in Stack, so we need to offset from center
-                          // Grid has padding 4px, and cells have margin 0.5px each side (1px total spacing)
-                          const cellMargin = 0.5;
-                          final cellSpacing = GameConstants.cellSize + (cellMargin * 2); // cellSize + 1px
-                          final gridContentWidth = GameConstants.gridCols * cellSpacing;
-                          final gridContentHeight = GameConstants.gridRows * cellSpacing;
-                          final gridOffsetX = (gridSize.width - gridContentWidth) / 2;
-                          final gridOffsetY = (gridSize.height - gridContentHeight) / 2;
-                          
-                          // Calculate ghost block position
-                          // Position = (col * cellSpacing) + padding + offset
-                          final ghostLeft = (dragController.gridCol! * cellSpacing) + 4 + gridOffsetX;
-                          final ghostTop = (dragController.gridRow! * cellSpacing) + 4 + gridOffsetY;
-                          
-                          return Positioned(
-                            left: ghostLeft,
-                            top: ghostTop,
-                            child: _buildGhostBlock(),
-                          );
-                        },
+                      Positioned(
+                        left: _calculateGhostBlockOffset().dx,
+                        top: _calculateGhostBlockOffset().dy,
+                        child: _buildGhostBlock(),
                       ),
                     // Combo effects (explosions and text)
                     ..._activeEffects.map((effect) {

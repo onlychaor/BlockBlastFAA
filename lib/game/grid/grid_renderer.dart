@@ -18,57 +18,19 @@ class GridRenderer extends StatefulWidget {
   State<GridRenderer> createState() => _GridRendererState();
 }
 
-class _GridRendererState extends State<GridRenderer> with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
+class _GridRendererState extends State<GridRenderer> {
   final List<_FallingParticleData> _fallingParticles = [];
-  
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: GameConstants.lineClearAnimation,
-      vsync: this,
-    );
-    
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
-    );
-    
-    _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
-      ),
-    );
-  }
-  
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-  
-  void triggerClearAnimation() {
-    _animationController.forward(from: 0.0);
-  }
   
   @override
   void didUpdateWidget(GridRenderer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Check if there are cells marked for clearing
-    bool hasClearingCells = false;
+    // Check if there are cells marked for clearing (for particles)
     List<_CellClearData> cellsToClear = [];
     
     for (int row = 0; row < widget.grid.rows; row++) {
       for (int col = 0; col < widget.grid.cols; col++) {
         final cell = widget.grid.getCell(row, col);
         if (cell?.isClearing ?? false) {
-          hasClearingCells = true;
           // Check if this cell was not clearing before (newly marked)
           final wasClearing = oldWidget.grid.getCell(row, col)?.isClearing ?? false;
           if (!wasClearing && cell?.isFilled == true && cell?.color != 0) {
@@ -88,15 +50,6 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
       Future.delayed(const Duration(milliseconds: 50), () {
         if (mounted) {
           _createFallingParticles(cellsToClear);
-        }
-      });
-    }
-    
-    // Trigger animation when cells are marked for clearing
-    if (hasClearingCells && !_animationController.isAnimating) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          triggerClearAnimation();
         }
       });
     }
@@ -133,15 +86,13 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
   
   @override
   Widget build(BuildContext context) {
-    // Check if there are cells marked for clearing
-    bool hasClearingCells = false;
+    // Check if there are cells marked for clearing (for particles)
     List<_CellClearData> cellsToClear = [];
     
     for (int row = 0; row < widget.grid.rows; row++) {
       for (int col = 0; col < widget.grid.cols; col++) {
         final cell = widget.grid.getCell(row, col);
         if (cell?.isClearing ?? false) {
-          hasClearingCells = true;
           // Create particles for cells being cleared
           if (cell?.isFilled == true && cell?.color != 0) {
             // Check if we haven't already created particles for this cell
@@ -175,44 +126,99 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
       });
     }
     
-    // Trigger animation when cells are marked for clearing
-    if (hasClearingCells && !_animationController.isAnimating) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          triggerClearAnimation();
-        }
-      });
-    }
+    // Cells are cleared immediately, no animation needed
     
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          // Padding matches cell margin (0.5) to align grid perfectly with border
-          padding: const EdgeInsets.all(0.5),
-          decoration: BoxDecoration(
-            color: const Color(GameConstants.gridBackgroundColor),
-            borderRadius: BorderRadius.zero, // Square corners to match grid cells
-            border: Border.all(
-              color: const Color(GameConstants.gridLineColor).withValues(alpha: 0.3),
-              width: 2,
+    // Calculate grid dimensions - use const values where possible to prevent jitter
+    const cellMargin = 0.5;
+    final cellSpacing = widget.cellSize + (cellMargin * 2);
+    final gridWidth = widget.grid.cols * cellSpacing;
+    final gridHeight = widget.grid.rows * cellSpacing;
+    const borderWidth = 3.0;
+    final totalWidth = gridWidth + (borderWidth * 2);
+    final totalHeight = gridHeight + (borderWidth * 2);
+    
+    return SizedBox(
+      width: totalWidth,
+      height: totalHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Background container with border - fixed size to prevent jitter
+          Container(
+            width: totalWidth,
+            height: totalHeight,
+            decoration: BoxDecoration(
+            // Professional wood-themed gradient background
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(GameConstants.gridBackgroundColor),
+                const Color(0xFF7A5A3A), // Slightly darker wood
+                const Color(GameConstants.gridBackgroundColor),
+              ],
+              stops: const [0.0, 0.5, 1.0],
             ),
+            borderRadius: BorderRadius.zero, // Square corners to match grid cells
+            // Professional wood border with shadow
+            border: Border.all(
+              color: const Color(GameConstants.gridBorderColor),
+              width: borderWidth,
+            ),
+            boxShadow: [
+              // Inner shadow for depth
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 0,
+                offset: const Offset(2, 2),
+                spreadRadius: 0,
+              ),
+              // Outer shadow for elevation
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
+              ),
+            ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(
-              widget.grid.rows,
-              (row) => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(
-                  widget.grid.cols,
-                  (col) {
-                    final cell = widget.grid.getCell(row, col);
-                    return cell != null ? _buildCell(cell) : const SizedBox();
-                  },
+        ),
+        // Grid content positioned to align with border inner edge
+        Positioned(
+          left: borderWidth,
+          top: borderWidth,
+          child: Stack(
+            children: [
+              // Grid lines overlay for professional look
+              CustomPaint(
+                size: Size(
+                  widget.grid.cols * (widget.cellSize + 1),
+                  widget.grid.rows * (widget.cellSize + 1),
+                ),
+                painter: _GridLinesPainter(
+                  rows: widget.grid.rows,
+                  cols: widget.grid.cols,
+                  cellSize: widget.cellSize,
                 ),
               ),
-            ),
+              // Cells - start immediately at border inner edge
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  widget.grid.rows,
+                  (row) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                      widget.grid.cols,
+                      (col) {
+                        final cell = widget.grid.getCell(row, col);
+                        return cell != null ? _buildCell(cell, row: row, col: col) : const SizedBox();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         // Falling particles overlay
@@ -231,48 +237,19 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
           );
         }),
       ],
+      ),
     );
   }
   
-  Widget _buildCell(GridCell cell) {
+  Widget _buildCell(GridCell cell, {int? row, int? col}) {
     final isFilled = cell.isFilled;
-    final isClearing = cell.isClearing;
     final cellColor = cell.color;
     
-    // If cell is being cleared, show animation
-    if (isClearing && isFilled && cellColor != 0) {
-      return AnimatedBuilder(
-        animation: _animationController,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Opacity(
-              opacity: _opacityAnimation.value,
-              child: Container(
-                width: widget.cellSize,
-                height: widget.cellSize,
-                decoration: BoxDecoration(
-                  color: Color(cellColor),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    width: 2,
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                  // Reduced glow effect for less visual noise
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.white.withValues(alpha: 0.3),
-                      blurRadius: 4 * _scaleAnimation.value,
-                      spreadRadius: 1 * _scaleAnimation.value,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    }
+    // Determine if this is an edge cell (no margin on outer edges)
+    final isTopEdge = row == 0;
+    final isBottomEdge = row == widget.grid.rows - 1;
+    final isLeftEdge = col == 0;
+    final isRightEdge = col == widget.grid.cols - 1;
     
     // Normal cell display with enhanced graphics
     if (isFilled && cellColor != 0) {
@@ -283,7 +260,13 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
       return Container(
         width: widget.cellSize,
         height: widget.cellSize,
-        margin: const EdgeInsets.all(0.5),
+        // Remove margin on outer edges to make border sát với grid
+        margin: EdgeInsets.only(
+          top: isTopEdge ? 0 : 0.5,
+          bottom: isBottomEdge ? 0 : 0.5,
+          left: isLeftEdge ? 0 : 0.5,
+          right: isRightEdge ? 0 : 0.5,
+        ),
         decoration: BoxDecoration(
           // Gradient for 3D effect
           gradient: LinearGradient(
@@ -368,17 +351,42 @@ class _GridRendererState extends State<GridRenderer> with SingleTickerProviderSt
       );
     }
     
-    // Empty cell - must have same margin as filled cells
+    // Empty cell - Professional wood-themed design
     return Container(
       width: widget.cellSize,
       height: widget.cellSize,
-      margin: const EdgeInsets.all(0.5), // Same margin as filled cells
+      // Remove margin on outer edges to make border sát với grid
+      margin: EdgeInsets.only(
+        top: isTopEdge ? 0 : 0.5,
+        bottom: isBottomEdge ? 0 : 0.5,
+        left: isLeftEdge ? 0 : 0.5,
+        right: isRightEdge ? 0 : 0.5,
+      ),
       decoration: BoxDecoration(
-        color: const Color(GameConstants.emptyCellColor),
-        border: Border.all(
-          color: const Color(GameConstants.gridLineColor).withValues(alpha: 0.15),
-          width: 0.5,
+        // Subtle wood grain effect for empty cells
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(GameConstants.emptyCellColor),
+            const Color(0xFF5A3E28), // Slightly darker
+            const Color(GameConstants.emptyCellColor),
+          ],
+          stops: const [0.0, 0.5, 1.0],
         ),
+        border: Border.all(
+          color: const Color(GameConstants.gridLineColor).withValues(alpha: 0.25),
+          width: 1,
+        ),
+        // Subtle inner shadow for depth
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 2,
+            offset: const Offset(1, 1),
+            spreadRadius: -1,
+          ),
+        ],
       ),
     );
   }
@@ -408,5 +416,49 @@ class _FallingParticleData {
     required this.color,
     required this.onComplete,
   });
+}
+
+// Professional grid lines painter
+class _GridLinesPainter extends CustomPainter {
+  final int rows;
+  final int cols;
+  final double cellSize;
+  
+  _GridLinesPainter({
+    required this.rows,
+    required this.cols,
+    required this.cellSize,
+  });
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = const Color(GameConstants.gridLineColor).withValues(alpha: 0.2);
+    
+    // Draw vertical lines
+    for (int col = 0; col <= cols; col++) {
+      final x = col * (cellSize + 1) + 0.5;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        paint,
+      );
+    }
+    
+    // Draw horizontal lines
+    for (int row = 0; row <= rows; row++) {
+      final y = row * (cellSize + 1) + 0.5;
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        paint,
+      );
+    }
+  }
+  
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

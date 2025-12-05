@@ -34,9 +34,12 @@ class DragController {
   void _updateGridPosition(Offset gridPosition) {
     if (_draggedBlock == null) return;
     
-    // Account for grid padding (4px)
-    final adjustedX = gridPosition.dx - 4;
-    final adjustedY = gridPosition.dy - 4;
+    // Account for grid border (3px) and padding (1.0px) = 4px total
+    const borderWidth = 3.0;
+    const gridPadding = 1.0;
+    final totalOffset = borderWidth + gridPadding;
+    final adjustedX = gridPosition.dx - totalOffset;
+    final adjustedY = gridPosition.dy - totalOffset;
     
     // Account for cell margin (0.5px each side = 1px total spacing)
     const cellMargin = 0.5;

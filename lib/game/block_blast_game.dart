@@ -27,6 +27,8 @@ class BlockBlastGame {
   int _level = 1;
   int _bestScore = 0;
   int _totalLinesCleared = 0;
+  int _comboCount = 0; // Current combo chain
+  int _maxCombo = 0; // Maximum combo achieved
   GameState _state = GameState.playing;
   Character? _currentCharacter;
   
@@ -66,6 +68,8 @@ class BlockBlastGame {
   List<Block> get currentBlocks => List.unmodifiable(blockQueue);
   Character? get currentCharacter => _currentCharacter;
   int get totalLinesCleared => _totalLinesCleared;
+  int get comboCount => _comboCount;
+  int get maxCombo => _maxCombo;
   
   /// Check if a block can be placed anywhere on the grid
   bool _canPlaceBlockAnywhere(Block block) {
@@ -261,16 +265,74 @@ class BlockBlastGame {
       final clearedLines = fullRows.length + fullCols.length;
       
       if (clearedLines > 0) {
-        // Mark cells for clearing animation first
+        // Collect cell data for particles before clearing
+        List<Map<String, dynamic>> cellsForParticles = [];
+        for (int row in fullRows) {
+          for (int col = 0; col < grid.cols; col++) {
+            final cell = grid.getCell(row, col);
+            if (cell != null && cell.isFilled && cell.color != 0) {
+              cellsForParticles.add({
+                'row': row,
+                'col': col,
+                'color': cell.color,
+              });
+            }
+          }
+        }
+        for (int col in fullCols) {
+          for (int row = 0; row < grid.rows; row++) {
+            final cell = grid.getCell(row, col);
+            if (cell != null && cell.isFilled && cell.color != 0) {
+              // Avoid duplicates (cells in both row and col)
+              if (!cellsForParticles.any((c) => c['row'] == row && c['col'] == col)) {
+                cellsForParticles.add({
+                  'row': row,
+                  'col': col,
+                  'color': cell.color,
+                });
+              }
+            }
+          }
+        }
+        
+        // Mark cells for clearing briefly to trigger particles, then clear immediately
         grid.markFullLinesForClearing();
         
-        // Wait for animation then clear
-        Future.delayed(GameConstants.lineClearAnimation, () {
-          grid.clearFullLines();
-        });
+        // Clear immediately without waiting for animation
+        grid.clearFullLines();
         
-        _score += clearedLines * GameConstants.pointsPerLine;
+        // Increase combo count
+        _comboCount++;
+        if (_comboCount > _maxCombo) {
+          _maxCombo = _comboCount;
+        }
+        
+        // Calculate score with combo multiplier and bonuses
+        int baseScore = clearedLines * GameConstants.pointsPerLine;
+        
+        // Multi-line bonus
+        int multiLineBonus = 0;
+        if (clearedLines >= 5) {
+          multiLineBonus = GameConstants.megaLineBonus;
+        } else if (clearedLines >= 4) {
+          multiLineBonus = GameConstants.quadLineBonus;
+        } else if (clearedLines >= 3) {
+          multiLineBonus = GameConstants.tripleLineBonus;
+        } else if (clearedLines >= 2) {
+          multiLineBonus = GameConstants.doubleLineBonus;
+        }
+        
+        // Combo multiplier (caps at maxComboMultiplier)
+        int comboMultiplier = _comboCount.clamp(
+          GameConstants.baseComboMultiplier, 
+          GameConstants.maxComboMultiplier
+        );
+        
+        // Final score calculation
+        int finalScore = (baseScore + multiLineBonus) * comboMultiplier;
+        _score += finalScore;
         _totalLinesCleared += clearedLines;
+        
         audioManager.playLineClear();
         
         // Update best score if needed
@@ -284,6 +346,8 @@ class BlockBlastGame {
         
         _updateLevel();
       } else {
+        // No lines cleared - reset combo
+        _comboCount = 0;
         _score += block.cellCount * GameConstants.pointsPerBlock;
         // Update best score if needed
         if (_score > _bestScore) {
@@ -406,6 +470,8 @@ class BlockBlastGame {
     _score = GameConstants.initialScore;
     _level = 1;
     _totalLinesCleared = 0;
+    _comboCount = 0;
+    _maxCombo = 0;
     _state = GameState.playing;
     _currentCharacter = null;
     _loadBestScore(); // Reload best score
